@@ -13,7 +13,6 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import AuthCallback from './pages/AuthCallback';
 import OfflineBanner from './components/OfflineBanner';
 import Docs from './pages/Docs';
 import Terms from './pages/Terms';
@@ -60,7 +59,6 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/docs" element={<Docs />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/copyright" element={<Copyright />} />

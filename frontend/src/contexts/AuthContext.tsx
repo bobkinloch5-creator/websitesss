@@ -17,7 +17,6 @@ interface AuthContextType {
   user: UserProfile | null;
   session: Session | null;
   login: (email: string, password: string) => Promise<void>;
-  loginWithDiscord: () => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -187,28 +186,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithDiscord = async () => {
-    try {
-      setError(null);
-      console.log('🎮 Initiating Discord login...');
-      
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'discord',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          scopes: 'identify email',
-        },
-      });
-
-      if (error) throw error;
-      
-      console.log('✅ Discord redirect initiated');
-    } catch (err: any) {
-      console.error('❌ Discord login error:', err);
-      setError(err.message || 'Discord login failed');
-      throw err;
-    }
-  };
 
   const login = async (email: string, password: string) => {
     try {
@@ -287,8 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         session,
         login,
-        loginWithDiscord,
-        register,
+          register,
         logout,
         refreshUser,
         loading,
