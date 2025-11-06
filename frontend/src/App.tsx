@@ -10,11 +10,9 @@ import Templates from './pages/Templates';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AuthCallback from './pages/AuthCallback';
 import './App.css';
 import './styles/navbar.css';
-
-// Placeholder for AuthCallback - can be created later
-const AuthCallback = () => <div>Auth Callback Page</div>;
 
 function App() {
   return (

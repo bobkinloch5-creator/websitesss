@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaDiscord } from 'react-icons/fa';
+import { useAuth } from '../contexts/AuthContext';
 import '../styles/auth.css';
 
 const Login: React.FC = () => {
@@ -10,6 +11,7 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { loginWithDiscord } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,9 +38,17 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleDiscordLogin = () => {
-    // TODO: Integrate Discord OAuth
-    window.location.href = '/api/auth/discord';
+  const handleDiscordLogin = async () => {
+    try {
+      setError('');
+      setLoading(true);
+      await loginWithDiscord();
+      // Supabase will redirect to /auth/callback
+    } catch (e: any) {
+      setError(e?.message || 'Discord login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
