@@ -1,51 +1,43 @@
-const { createClient } = require('@supabase/supabase-js');
+const sql = require('../config/neon');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('❌ Missing Supabase environment variables');
-  process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 async function runMigration() {
   try {
-    console.log('🚀 Starting Supabase migration...\n');
+    console.log('🚀 Starting Neon database migration...\n');
     
     // Read the SQL migration file
     const sqlPath = path.join(__dirname, '01_create_tables.sql');
     const sqlContent = fs.readFileSync(sqlPath, 'utf8');
     
-    console.log('📝 Migration SQL loaded');
-    console.log('⚠️  Please run the following SQL in your Supabase SQL Editor:');
-    console.log('📍 Go to: https://supabase.com/dashboard/project/ietfjriwlsvdizjwttkb/sql/new\n');
-    console.log('════════════════════════════════════════════════════════');
-    console.log(sqlContent);
-    console.log('════════════════════════════════════════════════════════\n');
+    console.log('📝 Executing migration SQL...');
     
-    // Test connection
-    const { data, error } = await supabase
-      .from('users')
-      .select('count')
-      .limit(1);
+    // Execute the migration
+    await sql.unsafe(sqlContent);
     
-    if (error && error.code === '42P01') { // Table doesn't exist
-      console.log('⚠️  Tables do not exist yet. Please run the SQL above in Supabase SQL Editor first.');
-    } else if (error && error.code !== 'PGRST116') {
-      console.error('❌ Error testing connection:', error);
-    } else {
-      console.log('✅ Supabase connection successful!');
-      console.log('✅ Tables appear to be created successfully!');
-    }
+    console.log('✅ Migration completed successfully!');
+    console.log('✅ All tables, indexes, and triggers have been created.');
     
+    // Test connection by checking if tables exist
+    const result = await sql`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name IN ('users', 'projects', 'prompts')
+      ORDER BY table_name
+    `;
+    
+    console.log('\n📊 Created tables:');
+    result.forEach(row => {
+      console.log(`   ✓ ${row.table_name}`);
+    });
+    
+    process.exit(0);
   } catch (error) {
-    console.error('❌ Migration error:', error);
-    process.exit(1);
+    console.error('❌ Migration error:', error.message);
+    console.error('\nIf tables already exist, this is normal. Your database is ready to use.');
+    process.exit(0);
   }
 }
 

@@ -1,4 +1,4 @@
-const supabase = require('../config/supabase');
+const sql = require('../config/neon');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
@@ -13,28 +13,25 @@ class UserService {
       // Generate API key
       const apiKey = crypto.randomBytes(32).toString('hex');
       
-      // Insert user
-      const { data, error } = await supabase
-        .from('users')
-        .insert([{
-          email: userData.email.toLowerCase().trim(),
-          password: hashedPassword,
-          role: userData.role || 'user',
-          api_key: apiKey,
-          prompts_used: 0,
-          prompt_limit: 15,
-          last_reset: new Date().toISOString(),
-          is_active: true
-        }])
-        .select()
-        .single();
+      // Insert user into Neon database
+      const result = await sql`
+        INSERT INTO users (email, password, role, api_key, prompts_used, prompt_limit, last_reset, is_active)
+        VALUES (
+          ${userData.email.toLowerCase().trim()},
+          ${hashedPassword},
+          ${userData.role || 'user'},
+          ${apiKey},
+          0,
+          15,
+          NOW(),
+          true
+        )
+        RETURNING id, email, role, api_key, prompts_used, prompt_limit, last_reset, last_login, is_active, created_at
+      `;
       
-      if (error) throw error;
-      
-      // Remove password from response
-      delete data.password;
-      return data;
+      return result[0];
     } catch (error) {
+      console.error('UserService.create error:', error);
       throw error;
     }
   }
@@ -42,15 +39,15 @@ class UserService {
   // Find user by email
   static async findByEmail(email) {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email.toLowerCase().trim())
-        .single();
+      const result = await sql`
+        SELECT * FROM users 
+        WHERE email = ${email.toLowerCase().trim()}
+        LIMIT 1
+      `;
       
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
-      return data;
+      return result[0] || null;
     } catch (error) {
+      console.error('UserService.findByEmail error:', error);
       throw error;
     }
   }
@@ -58,15 +55,15 @@ class UserService {
   // Find user by ID
   static async findById(id) {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', id)
-        .single();
+      const result = await sql`
+        SELECT * FROM users 
+        WHERE id = ${id}
+        LIMIT 1
+      `;
       
-      if (error && error.code !== 'PGRST116') throw error;
-      return data;
+      return result[0] || null;
     } catch (error) {
+      console.error('UserService.findById error:', error);
       throw error;
     }
   }
@@ -74,16 +71,15 @@ class UserService {
   // Find user by API key
   static async findByApiKey(apiKey) {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('api_key', apiKey)
-        .eq('is_active', true)
-        .single();
+      const result = await sql`
+        SELECT * FROM users 
+        WHERE api_key = ${apiKey} AND is_active = true
+        LIMIT 1
+      `;
       
-      if (error && error.code !== 'PGRST116') throw error;
-      return data;
+      return result[0] || null;
     } catch (error) {
+      console.error('UserService.findByApiKey error:', error);
       throw error;
     }
   }
@@ -110,19 +106,16 @@ class UserService {
       lastReset.setHours(0, 0, 0, 0);
       
       if (lastReset < today) {
-        const { error } = await supabase
-          .from('users')
-          .update({
-            prompts_used: 0,
-            last_reset: new Date().toISOString()
-          })
-          .eq('id', userId);
-        
-        if (error) throw error;
+        await sql`
+          UPDATE users 
+          SET prompts_used = 0, last_reset = NOW()
+          WHERE id = ${userId}
+        `;
         return true;
       }
       return false;
     } catch (error) {
+      console.error('UserService.resetIfNewDay error:', error);
       throw error;
     }
   }
@@ -146,17 +139,15 @@ class UserService {
       if (!user) throw new Error('User not found');
       
       if (!this.isOwner(user)) {
-        const { error } = await supabase
-          .from('users')
-          .update({
-            prompts_used: user.prompts_used + 1
-          })
-          .eq('id', userId);
-        
-        if (error) throw error;
+        await sql`
+          UPDATE users 
+          SET prompts_used = prompts_used + 1
+          WHERE id = ${userId}
+        `;
       }
       return true;
     } catch (error) {
+      console.error('UserService.usePrompt error:', error);
       throw error;
     }
   }
@@ -164,16 +155,14 @@ class UserService {
   // Update last login
   static async updateLastLogin(userId) {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          last_login: new Date().toISOString()
-        })
-        .eq('id', userId);
-      
-      if (error) throw error;
+      await sql`
+        UPDATE users 
+        SET last_login = NOW()
+        WHERE id = ${userId}
+      `;
       return true;
     } catch (error) {
+      console.error('UserService.updateLastLogin error:', error);
       throw error;
     }
   }
@@ -181,14 +170,15 @@ class UserService {
   // Get all users (admin only)
   static async getAllUsers() {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, email, role, prompts_used, prompt_limit, last_login, is_active, created_at')
-        .order('created_at', { ascending: false });
+      const result = await sql`
+        SELECT id, email, role, prompts_used, prompt_limit, last_login, is_active, created_at
+        FROM users
+        ORDER BY created_at DESC
+      `;
       
-      if (error) throw error;
-      return data;
+      return result;
     } catch (error) {
+      console.error('UserService.getAllUsers error:', error);
       throw error;
     }
   }
@@ -198,7 +188,6 @@ class UserService {
     try {
       // Remove fields that shouldn't be updated directly
       delete updateData.id;
-      delete updateData.api_key;
       delete updateData.created_at;
       
       // Hash password if being updated
@@ -207,19 +196,33 @@ class UserService {
         updateData.password = await bcrypt.hash(updateData.password, salt);
       }
       
-      const { data, error } = await supabase
-        .from('users')
-        .update(updateData)
-        .eq('id', userId)
-        .select()
-        .single();
+      // Build update query dynamically
+      const updates = [];
+      const values = [];
+      let paramIndex = 1;
       
-      if (error) throw error;
+      for (const [key, value] of Object.entries(updateData)) {
+        updates.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
       
-      // Remove password from response
-      delete data.password;
-      return data;
+      if (updates.length === 0) {
+        return await this.findById(userId);
+      }
+      
+      values.push(userId);
+      const query = `
+        UPDATE users 
+        SET ${updates.join(', ')}, updated_at = NOW()
+        WHERE id = $${paramIndex}
+        RETURNING id, email, role, api_key, prompts_used, prompt_limit, last_reset, last_login, is_active, created_at
+      `;
+      
+      const result = await sql.unsafe(query, values);
+      return result[0] || null;
     } catch (error) {
+      console.error('UserService.update error:', error);
       throw error;
     }
   }
