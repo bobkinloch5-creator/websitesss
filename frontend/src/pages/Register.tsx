@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaDiscord } from 'react-icons/fa';
 import '../styles/auth.css';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 const Register: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -11,6 +13,7 @@ const Register: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { loginWithDiscord } = useAuth();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,17 +27,15 @@ const Register: React.FC = () => {
     setError('');
 
     try {
-      // TODO: Integrate with actual auth API
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (response.ok) {
-        navigate('/dashboard');
+      const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+      if (signUpError) {
+        setError(signUpError.message || 'Registration failed. Please try again.');
       } else {
-        setError('Registration failed. Please try again.');
+        if (data.session) {
+          navigate('/dashboard');
+        } else {
+          navigate('/login');
+        }
       }
     } catch (err) {
       setError('Registration failed. Please try again.');
@@ -44,8 +45,7 @@ const Register: React.FC = () => {
   };
 
   const handleDiscordRegister = () => {
-    // TODO: Integrate Discord OAuth
-    window.location.href = '/api/auth/discord';
+    loginWithDiscord();
   };
 
   return (
