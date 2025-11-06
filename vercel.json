@@ -1,7 +1,7 @@
 {
   "version": 2,
   "framework": "vite",
-  "buildCommand": "npm --prefix frontend ci && npm --prefix frontend run build",
+  "buildCommand": "NPM_CONFIG_PRODUCTION=false npm --prefix frontend ci --include=dev && npm --prefix frontend run build",
   "outputDirectory": "frontend/dist",
   "routes": [
     {
