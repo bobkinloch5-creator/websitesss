@@ -1,40 +1,54 @@
 const axios = require('axios');
+const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
 
 class AIService {
   constructor() {
     this.apiUrl = process.env.YOUR_AI_API_URL;
     this.apiKey = process.env.YOUR_AI_API_KEY;
+    this.bedrockModelId = process.env.BEDROCK_MODEL_ID;
+    this.awsRegion = process.env.AWS_REGION || 'us-east-1';
+    this.bedrock = this.bedrockModelId
+      ? new BedrockRuntimeClient({ region: this.awsRegion })
+      : null;
     this.timeout = 120000;
   }
 
   async processPrompt(userPrompt, projectContext = {}) {
     try {
       const startTime = Date.now();
-      const response = await axios.post(
-        this.apiUrl,
-        {
-          messages: [
-            { role: 'system', content: this.getSystemPrompt() },
-            { role: 'user', content: userPrompt }
-          ],
-          context: projectContext,
-          temperature: 0.7,
-          max_tokens: 4000
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json'
+      let raw;
+      if (this.bedrock) {
+        raw = await this.invokeBedrock(userPrompt, projectContext);
+      } else if (this.apiUrl && this.apiKey) {
+        const response = await axios.post(
+          this.apiUrl,
+          {
+            messages: [
+              { role: 'system', content: this.getSystemPrompt() },
+              { role: 'user', content: userPrompt }
+            ],
+            context: projectContext,
+            temperature: 0.7,
+            max_tokens: 4000
           },
-          timeout: this.timeout
-        }
-      );
+          {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: this.timeout
+          }
+        );
+        raw = response.data;
+      } else {
+        throw new Error('No AI provider configured. Set BEDROCK_MODEL_ID (and AWS creds) or YOUR_AI_API_URL/YOUR_AI_API_KEY.');
+      }
       const executionTime = Date.now() - startTime;
-      const parsed = this.parseAIResponse(response.data);
+      const parsed = this.parseAIResponse(raw);
       return {
         ...parsed,
         executionTime,
-        rawResponse: response.data
+        rawResponse: raw
       };
     } catch (error) {
       console.error('❌ AI Service Error:', error.message);
@@ -46,6 +60,33 @@ class AIService {
         throw new Error(`AI processing failed: ${error.message}`);
       }
     }
+  }
+
+  async invokeBedrock(userPrompt, projectContext) {
+    const systemPrompt = this.getSystemPrompt();
+    const userWithContext = `${userPrompt}\n\nContext JSON:\n${JSON.stringify(projectContext)}`;
+    const payload = {
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: 2000,
+      temperature: 0.7,
+      system: [{ type: 'text', text: systemPrompt }],
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: userWithContext }]
+        }
+      ]
+    };
+    const cmd = new InvokeModelCommand({
+      modelId: this.bedrockModelId,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: Buffer.from(JSON.stringify(payload))
+    });
+    const res = await this.bedrock.send(cmd);
+    const json = JSON.parse(Buffer.from(res.body).toString('utf-8'));
+    const contentText = json?.content?.[0]?.text || json?.output_text || JSON.stringify(json);
+    return contentText;
   }
 
   getSystemPrompt() {

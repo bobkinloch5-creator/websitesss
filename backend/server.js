@@ -147,6 +147,18 @@ app.get('/health', async (req, res) => {
   });
 });
 
+// Alias to match frontend expectation
+app.get('/api/health', async (req, res) => {
+  const supabaseConnected = await testSupabaseConnection();
+  res.json({ 
+    status: 'healthy',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    database: supabaseConnected ? 'connected' : 'disconnected',
+    connectedClients: io.engine.clientsCount
+  });
+});
+
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/prompts', require('./routes/prompts'));

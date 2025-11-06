@@ -11,6 +11,10 @@ import Profile from './pages/Profile';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AuthCallback from './pages/AuthCallback';
+import OfflineBanner from './components/OfflineBanner';
+import Docs from './pages/Docs';
+import Terms from './pages/Terms';
+import Copyright from './pages/Copyright';
 import './App.css';
 import './styles/navbar.css';
 
@@ -19,11 +23,15 @@ function App() {
     <Router>
       <AuthProvider>
         <WebSocketProvider>
+          <OfflineBanner />
           <Routes>
             {/* Public routes - no navbar */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/docs" element={<Docs />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/copyright" element={<Copyright />} />
             
             {/* Protected routes - with navbar */}
             <Route

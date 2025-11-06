@@ -23,6 +23,7 @@ const Navbar: React.FC = () => {
     { path: '/dashboard', icon: FaHome, label: 'Dashboard' },
     { path: '/chat', icon: FaComments, label: 'AI Chat' },
     { path: '/templates', icon: FaLayerGroup, label: 'Templates' },
+    { path: '/docs', icon: FaLayerGroup, label: 'Docs' },
     { path: '/profile', icon: FaUser, label: 'Profile' },
   ];
 
@@ -61,8 +62,8 @@ const Navbar: React.FC = () => {
           })}
         </div>
 
-        {/* Status Badges */}
-        <div className="navbar-status">
+        {/* Status Badges and Legal Links */}
+        <div className="navbar-status" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* Prompt Balance */}
           <div className="status-badge balance-badge">
             <FaCoins className="badge-icon" />
@@ -76,6 +77,12 @@ const Navbar: React.FC = () => {
               {pluginConnected ? 'Connected' : 'Disconnected'}
             </span>
             <div className="status-dot"></div>
+          </div>
+
+          {/* Legal Links */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 8 }}>
+            <Link to="/terms" className="nav-link" style={{ fontSize: 12, opacity: 0.85 }}>Terms</Link>
+            <Link to="/copyright" className="nav-link" style={{ fontSize: 12, opacity: 0.85 }}>Copyright</Link>
           </div>
         </div>
       </div>
