@@ -15,6 +15,7 @@ import OfflineBanner from './components/OfflineBanner';
 import Docs from './pages/Docs';
 import Terms from './pages/Terms';
 import Copyright from './pages/Copyright';
+import OAuthCodeRedirect from './pages/OAuthCodeRedirect';
 import './App.css';
 import './styles/navbar.css';
 
@@ -32,6 +33,8 @@ function App() {
             <Route path="/docs" element={<Docs />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/copyright" element={<Copyright />} />
+            {/* Root: forward any /?code=... to /auth/callback */}
+            <Route path="/" element={<OAuthCodeRedirect />} />
             
             {/* Protected routes - with navbar */}
             <Route
