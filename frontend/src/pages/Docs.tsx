@@ -21,8 +21,15 @@ const Docs: React.FC = () => {
         <li><Link to="/terms">Terms of Service</Link></li>
         <li><Link to="/copyright">Copyright</Link></li>
       </ul>
+
+      <h2 style={{ fontSize: 22, marginTop: 24 }}>Support</h2>
+      <p>
+        Need help? Join our
+        {' '}<a href="https://discord.gg/rZbtJJ8XYV" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>Discord support server</a>.
+      </p>
     </div>
   );
 };
 
 export default Docs;
+

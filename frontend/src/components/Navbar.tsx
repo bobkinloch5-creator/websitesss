@@ -60,6 +60,17 @@ const Navbar: React.FC = () => {
               </Link>
             );
           })}
+
+          {/* External Support Server link */}
+          <a
+            href="https://discord.gg/rZbtJJ8XYV"
+            target="_blank"
+            rel="noreferrer"
+            className="nav-link"
+            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            <span>Support</span>
+          </a>
         </div>
 
         {/* Status Badges and Legal Links */}
