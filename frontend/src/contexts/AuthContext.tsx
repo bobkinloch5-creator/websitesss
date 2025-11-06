@@ -198,7 +198,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's an email not confirmed error
+        if (error.message.includes('Email not confirmed')) {
+          throw new Error('Please check your email to verify your account. If you didn\'t receive an email, contact support.');
+        }
+        throw error;
+      }
 
       console.log('✅ Email login successful');
       // Don't set loading to false here - let the auth state change handle it
