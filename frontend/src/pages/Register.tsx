@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Mail, Lock, User } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -13,6 +12,7 @@ const Register: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { register } = useAuth();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,46 +23,29 @@ const Register: React.FC = () => {
       return;
     }
 
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
       console.log('📝 Attempting registration with:', { email, username: name });
       
-      const { data, error: signUpError } = await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: {
-          data: {
-            username: name,
-          },
-        },
-      });
+      // Use AuthContext register function
+      await register(name, email, password);
       
-      console.log('Registration response:', { data, error: signUpError });
+      console.log('✅ Registration successful!');
+      toast.success('Account created! Check your email to verify your account.');
       
-      if (signUpError) {
-        console.error('❌ Registration error:', signUpError);
-        const errorMsg = signUpError.message || 'Registration failed. Please try again.';
-        setError(errorMsg);
-        toast.error(errorMsg);
-      } else if (data.user) {
-        console.log('✅ User created:', data.user.id);
-        
-        if (data.session) {
-          toast.success('Account created successfully!');
-          setTimeout(() => navigate('/dashboard'), 500);
-        } else {
-          toast.success('Check your email to verify your account!');
-          setTimeout(() => navigate('/login'), 1500);
-        }
-      } else {
-        console.error('❌ No user or session created');
-        setError('Registration failed. Please try again.');
-        toast.error('Registration failed. Please try again.');
-      }
+      // Redirect to login page
+      setTimeout(() => navigate('/login'), 2000);
+      
     } catch (err: any) {
-      console.error('❌ Registration exception:', err);
+      console.error('❌ Registration error:', err);
       const errorMsg = err?.message || 'Registration failed. Please try again.';
       setError(errorMsg);
       toast.error(errorMsg);
