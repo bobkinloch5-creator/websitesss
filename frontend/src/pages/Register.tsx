@@ -28,6 +28,8 @@ const Register: React.FC = () => {
     setError('');
 
     try {
+      console.log('📝 Attempting registration with:', { email, username: name });
+      
       const { data, error: signUpError } = await supabase.auth.signUp({ 
         email, 
         password,
@@ -37,21 +39,32 @@ const Register: React.FC = () => {
           },
         },
       });
+      
+      console.log('Registration response:', { data, error: signUpError });
+      
       if (signUpError) {
+        console.error('❌ Registration error:', signUpError);
         const errorMsg = signUpError.message || 'Registration failed. Please try again.';
         setError(errorMsg);
         toast.error(errorMsg);
-      } else {
+      } else if (data.user) {
+        console.log('✅ User created:', data.user.id);
+        
         if (data.session) {
           toast.success('Account created successfully!');
-          navigate('/dashboard');
+          setTimeout(() => navigate('/dashboard'), 500);
         } else {
           toast.success('Check your email to verify your account!');
-          navigate('/login');
+          setTimeout(() => navigate('/login'), 1500);
         }
+      } else {
+        console.error('❌ No user or session created');
+        setError('Registration failed. Please try again.');
+        toast.error('Registration failed. Please try again.');
       }
-    } catch (err) {
-      const errorMsg = 'Registration failed. Please try again.';
+    } catch (err: any) {
+      console.error('❌ Registration exception:', err);
+      const errorMsg = err?.message || 'Registration failed. Please try again.';
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {

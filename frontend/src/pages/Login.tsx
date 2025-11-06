@@ -14,15 +14,28 @@ const Login: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    setLoading(true);
 
     try {
+      console.log('🔐 Attempting login with:', email);
       await login(email, password);
+      console.log('✅ Login successful!');
       toast.success('Welcome back!');
       navigate('/dashboard');
     } catch (err: any) {
-      const errorMsg = err?.message || 'Invalid email or password';
+      console.error('❌ Login error:', err);
+      let errorMsg = 'Invalid email or password';
+      
+      // Provide more specific error messages
+      if (err?.message?.includes('Invalid login credentials')) {
+        errorMsg = 'Invalid email or password. Please check and try again.';
+      } else if (err?.message?.includes('Email not confirmed')) {
+        errorMsg = 'Please verify your email address first.';
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      
       setError(errorMsg);
       toast.error(errorMsg);
       setLoading(false);
