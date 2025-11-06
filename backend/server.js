@@ -5,7 +5,7 @@ const socketIo = require('socket.io');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
-const supabase = require('./config/supabase');
+const sql = require('./config/neon');
 
 const app = express();
 const server = http.createServer(app);
@@ -56,26 +56,19 @@ const io = socketIo(server, {
   pingInterval: 25000
 });
 
-// Test Supabase connection
-const testSupabaseConnection = async () => {
+// Test Neon database connection
+const testDatabaseConnection = async () => {
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('count')
-      .limit(1);
-    
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows (which is fine)
-      throw error;
-    }
-    console.log('✅ Supabase Connected Successfully');
+    const result = await sql`SELECT NOW() as time`;
+    console.log('✅ Neon Database Connected Successfully');
     return true;
   } catch (error) {
-    console.error('❌ Supabase Connection Error:', error.message);
+    console.error('❌ Database Connection Error:', error.message);
     return false;
   }
 };
 
-testSupabaseConnection();
+testDatabaseConnection();
 
 // Make io available to routes
 app.set('io', io);
@@ -137,24 +130,24 @@ io.on('connection', (socket) => {
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
-  const supabaseConnected = await testSupabaseConnection();
+  const databaseConnected = await testDatabaseConnection();
   res.json({ 
     status: 'healthy',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    database: supabaseConnected ? 'connected' : 'disconnected',
+    database: databaseConnected ? 'connected' : 'disconnected',
     connectedClients: io.engine.clientsCount
   });
 });
 
 // Alias to match frontend expectation
 app.get('/api/health', async (req, res) => {
-  const supabaseConnected = await testSupabaseConnection();
+  const databaseConnected = await testDatabaseConnection();
   res.json({ 
     status: 'healthy',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    database: supabaseConnected ? 'connected' : 'disconnected',
+    database: databaseConnected ? 'connected' : 'disconnected',
     connectedClients: io.engine.clientsCount
   });
 });
@@ -192,7 +185,7 @@ process.on('SIGTERM', () => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`\n╔════════════════════════════════════════╗\n║   🤖 HIDEOUT BOT SERVER RUNNING 🤖    ║\n╠════════════════════════════════════════╣\n║  Port: ${PORT.toString().padEnd(31)}║\n║  Environment: ${(process.env.NODE_ENV || 'development').padEnd(23)}║\n║  Database: Supabase                    ║\n║  Socket.io: Active                     ║\n╚════════════════════════════════════════╝\n  `);
+  console.log(`\n╔════════════════════════════════════════╗\n║   🤖 HIDEOUT BOT SERVER RUNNING 🤖    ║\n╠════════════════════════════════════════╣\n║  Port: ${PORT.toString().padEnd(31)}║\n║  Environment: ${(process.env.NODE_ENV || 'development').padEnd(23)}║\n║  Database: Neon PostgreSQL             ║\n║  Socket.io: Active                     ║\n╚════════════════════════════════════════╝\n  `);
 });
 
 module.exports = { app, server, io };

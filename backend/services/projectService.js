@@ -1,28 +1,28 @@
-const supabase = require('../config/supabase');
+const sql = require('../config/neon');
 
 class ProjectService {
   // Create a new project
   static async create(projectData) {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .insert([{
-          user_id: projectData.userId,
-          name: projectData.name.trim(),
-          description: projectData.description || null,
-          place_id: projectData.placeId || null,
-          thumbnail: projectData.thumbnail || null,
-          data: projectData.data || '',
-          context: projectData.context || {},
-          version: projectData.version || 1,
-          is_public: projectData.isPublic || false
-        }])
-        .select()
-        .single();
+      const result = await sql`
+        INSERT INTO projects (user_id, name, description, place_id, thumbnail, data, context, version, is_public)
+        VALUES (
+          ${projectData.userId},
+          ${projectData.name.trim()},
+          ${projectData.description || null},
+          ${projectData.placeId || null},
+          ${projectData.thumbnail || null},
+          ${projectData.data || ''},
+          ${JSON.stringify(projectData.context || {})},
+          ${projectData.version || 1},
+          ${projectData.isPublic || false}
+        )
+        RETURNING *
+      `;
       
-      if (error) throw error;
-      return data;
+      return result[0];
     } catch (error) {
+      console.error('ProjectService.create error:', error);
       throw error;
     }
   }
@@ -30,15 +30,15 @@ class ProjectService {
   // Find project by ID
   static async findById(id) {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', id)
-        .single();
+      const result = await sql`
+        SELECT * FROM projects 
+        WHERE id = ${id}
+        LIMIT 1
+      `;
       
-      if (error && error.code !== 'PGRST116') throw error;
-      return data;
+      return result[0] || null;
     } catch (error) {
+      console.error('ProjectService.findById error:', error);
       throw error;
     }
   }
@@ -46,15 +46,15 @@ class ProjectService {
   // Find all projects by user ID
   static async findByUserId(userId) {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+      const result = await sql`
+        SELECT * FROM projects 
+        WHERE user_id = ${userId}
+        ORDER BY created_at DESC
+      `;
       
-      if (error) throw error;
-      return data || [];
+      return result || [];
     } catch (error) {
+      console.error('ProjectService.findByUserId error:', error);
       throw error;
     }
   }
@@ -62,16 +62,16 @@ class ProjectService {
   // Find public projects
   static async findPublic(limit = 50) {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      const result = await sql`
+        SELECT * FROM projects 
+        WHERE is_public = true
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `;
       
-      if (error) throw error;
-      return data || [];
+      return result || [];
     } catch (error) {
+      console.error('ProjectService.findPublic error:', error);
       throw error;
     }
   }
@@ -84,28 +84,39 @@ class ProjectService {
       delete updateData.user_id;
       delete updateData.created_at;
       
-      // Convert camelCase to snake_case for database
-      const dbData = {};
-      if (updateData.name !== undefined) dbData.name = updateData.name.trim();
-      if (updateData.description !== undefined) dbData.description = updateData.description;
-      if (updateData.placeId !== undefined) dbData.place_id = updateData.placeId;
-      if (updateData.thumbnail !== undefined) dbData.thumbnail = updateData.thumbnail;
-      if (updateData.data !== undefined) dbData.data = updateData.data;
-      if (updateData.context !== undefined) dbData.context = updateData.context;
-      if (updateData.version !== undefined) dbData.version = updateData.version;
-      if (updateData.isPublic !== undefined) dbData.is_public = updateData.isPublic;
+      // Convert camelCase to snake_case and prepare data
+      const updates = {};
+      if (updateData.name !== undefined) updates.name = updateData.name.trim();
+      if (updateData.description !== undefined) updates.description = updateData.description;
+      if (updateData.placeId !== undefined) updates.place_id = updateData.placeId;
+      if (updateData.thumbnail !== undefined) updates.thumbnail = updateData.thumbnail;
+      if (updateData.data !== undefined) updates.data = updateData.data;
+      if (updateData.context !== undefined) updates.context = JSON.stringify(updateData.context);
+      if (updateData.version !== undefined) updates.version = updateData.version;
+      if (updateData.isPublic !== undefined) updates.is_public = updateData.isPublic;
       
-      const { data, error } = await supabase
-        .from('projects')
-        .update(dbData)
-        .eq('id', projectId)
-        .eq('user_id', userId) // Ensure user owns the project
-        .select()
-        .single();
+      // Build update query dynamically
+      const updateKeys = Object.keys(updates);
+      if (updateKeys.length === 0) {
+        return await this.findById(projectId);
+      }
       
-      if (error) throw error;
-      return data;
+      const setClause = updateKeys.map((key, index) => `${key} = $${index + 1}`).join(', ');
+      const values = updateKeys.map(key => updates[key]);
+      values.push(userId);
+      values.push(projectId);
+      
+      const query = `
+        UPDATE projects 
+        SET ${setClause}, updated_at = NOW(), last_modified = NOW()
+        WHERE user_id = $${values.length - 1} AND id = $${values.length}
+        RETURNING *
+      `;
+      
+      const result = await sql.unsafe(query, values);
+      return result[0] || null;
     } catch (error) {
+      console.error('ProjectService.update error:', error);
       throw error;
     }
   }
@@ -113,15 +124,14 @@ class ProjectService {
   // Delete project
   static async delete(projectId, userId) {
     try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', projectId)
-        .eq('user_id', userId); // Ensure user owns the project
+      await sql`
+        DELETE FROM projects 
+        WHERE id = ${projectId} AND user_id = ${userId}
+      `;
       
-      if (error) throw error;
       return true;
     } catch (error) {
+      console.error('ProjectService.delete error:', error);
       throw error;
     }
   }
@@ -129,14 +139,15 @@ class ProjectService {
   // Get project count for user
   static async countByUserId(userId) {
     try {
-      const { count, error } = await supabase
-        .from('projects')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
+      const result = await sql`
+        SELECT COUNT(*) as count 
+        FROM projects 
+        WHERE user_id = ${userId}
+      `;
       
-      if (error) throw error;
-      return count || 0;
+      return parseInt(result[0]?.count || 0);
     } catch (error) {
+      console.error('ProjectService.countByUserId error:', error);
       throw error;
     }
   }
@@ -144,16 +155,17 @@ class ProjectService {
   // Search projects
   static async search(userId, searchQuery) {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', userId)
-        .or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
-        .order('created_at', { ascending: false });
+      const searchPattern = `%${searchQuery}%`;
+      const result = await sql`
+        SELECT * FROM projects 
+        WHERE user_id = ${userId}
+        AND (name ILIKE ${searchPattern} OR description ILIKE ${searchPattern})
+        ORDER BY created_at DESC
+      `;
       
-      if (error) throw error;
-      return data || [];
+      return result || [];
     } catch (error) {
+      console.error('ProjectService.search error:', error);
       throw error;
     }
   }
@@ -170,26 +182,31 @@ class ProjectService {
         throw new Error('Unauthorized to clone this project');
       }
       
-      // Create clone
-      const { data, error } = await supabase
-        .from('projects')
-        .insert([{
-          user_id: userId,
-          name: newName || `${original.name} (Copy)`,
-          description: original.description,
-          place_id: original.place_id,
-          thumbnail: original.thumbnail,
-          data: original.data,
-          context: original.context,
-          version: original.version,
-          is_public: false // Clones start as private
-        }])
-        .select()
-        .single();
+      // Parse context if it's a string
+      const context = typeof original.context === 'string' 
+        ? JSON.parse(original.context) 
+        : original.context;
       
-      if (error) throw error;
-      return data;
+      // Create clone
+      const result = await sql`
+        INSERT INTO projects (user_id, name, description, place_id, thumbnail, data, context, version, is_public)
+        VALUES (
+          ${userId},
+          ${newName || `${original.name} (Copy)`},
+          ${original.description},
+          ${original.place_id},
+          ${original.thumbnail},
+          ${original.data},
+          ${JSON.stringify(context)},
+          ${original.version},
+          false
+        )
+        RETURNING *
+      `;
+      
+      return result[0];
     } catch (error) {
+      console.error('ProjectService.clone error:', error);
       throw error;
     }
   }

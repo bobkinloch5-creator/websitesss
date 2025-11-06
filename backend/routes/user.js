@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const supabase = require('../config/supabase');
+const auth = require('../middleware/auth');
+const sql = require('../config/neon');
 const crypto = require('crypto');
 
 // Encryption setup for AWS credentials
@@ -30,51 +31,30 @@ function decrypt(text) {
   }
 }
 
-// Middleware to verify user
-async function authenticateUser(req, res, next) {
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader) {
-    return res.status(401).json({ error: 'No authorization header' });
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  
+// Get AWS credentials
+router.get('/aws-credentials', auth, async (req, res) => {
   try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
+    const result = await sql`
+      SELECT aws_access_key, aws_secret_key, aws_region, aws_configured 
+      FROM users 
+      WHERE id = ${req.user.id}
+      LIMIT 1
+    `;
+
+    const user = result[0];
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    req.user = user;
-    next();
-  } catch (error) {
-    console.error('Auth error:', error);
-    res.status(401).json({ error: 'Authentication failed' });
-  }
-}
-
-// Get AWS credentials
-router.get('/aws-credentials', authenticateUser, async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('aws_access_key, aws_secret_key, aws_region, aws_configured')
-      .eq('id', req.user.id)
-      .single();
-
-    if (error) throw error;
-
-    if (!data.aws_configured) {
+    if (!user.aws_configured) {
       return res.json({ configured: false });
     }
 
     res.json({
       configured: true,
-      accessKeyId: data.aws_access_key ? decrypt(data.aws_access_key) : null,
-      secretAccessKey: data.aws_secret_key ? decrypt(data.aws_secret_key) : null,
-      region: data.aws_region || 'us-east-1',
+      accessKeyId: user.aws_access_key ? decrypt(user.aws_access_key) : null,
+      secretAccessKey: user.aws_secret_key ? decrypt(user.aws_secret_key) : null,
+      region: user.aws_region || 'us-east-1',
     });
   } catch (error) {
     console.error('Error fetching AWS credentials:', error);
@@ -83,7 +63,7 @@ router.get('/aws-credentials', authenticateUser, async (req, res) => {
 });
 
 // Save AWS credentials
-router.post('/aws-credentials', authenticateUser, async (req, res) => {
+router.post('/aws-credentials', auth, async (req, res) => {
   try {
     const { accessKeyId, secretAccessKey, region } = req.body;
 
@@ -95,17 +75,15 @@ router.post('/aws-credentials', authenticateUser, async (req, res) => {
     const encryptedAccessKey = encrypt(accessKeyId);
     const encryptedSecretKey = encrypt(secretAccessKey);
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        aws_access_key: encryptedAccessKey,
-        aws_secret_key: encryptedSecretKey,
-        aws_region: region || 'us-east-1',
-        aws_configured: true,
-      })
-      .eq('id', req.user.id);
-
-    if (error) throw error;
+    await sql`
+      UPDATE users 
+      SET 
+        aws_access_key = ${encryptedAccessKey},
+        aws_secret_key = ${encryptedSecretKey},
+        aws_region = ${region || 'us-east-1'},
+        aws_configured = true
+      WHERE id = ${req.user.id}
+    `;
 
     res.json({ success: true, message: 'AWS credentials saved successfully' });
   } catch (error) {
@@ -115,19 +93,17 @@ router.post('/aws-credentials', authenticateUser, async (req, res) => {
 });
 
 // Delete AWS credentials
-router.delete('/aws-credentials', authenticateUser, async (req, res) => {
+router.delete('/aws-credentials', auth, async (req, res) => {
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        aws_access_key: null,
-        aws_secret_key: null,
-        aws_region: null,
-        aws_configured: false,
-      })
-      .eq('id', req.user.id);
-
-    if (error) throw error;
+    await sql`
+      UPDATE users 
+      SET 
+        aws_access_key = NULL,
+        aws_secret_key = NULL,
+        aws_region = NULL,
+        aws_configured = false
+      WHERE id = ${req.user.id}
+    `;
 
     res.json({ success: true, message: 'AWS credentials deleted successfully' });
   } catch (error) {

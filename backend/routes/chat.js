@@ -1,49 +1,22 @@
 const express = require('express');
 const router = express.Router();
-const supabase = require('../config/supabase');
-
-// Middleware to verify user
-async function authenticateUser(req, res, next) {
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader) {
-    return res.status(401).json({ error: 'No authorization header' });
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  
-  try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    console.error('Auth error:', error);
-    res.status(401).json({ error: 'Authentication failed' });
-  }
-}
+const auth = require('../middleware/auth');
+const sql = require('../config/neon');
 
 // Get chat history for a project
-router.get('/history/:projectId', authenticateUser, async (req, res) => {
+router.get('/history/:projectId', auth, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { limit = 50, offset = 0 } = req.query;
 
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .eq('user_id', req.user.id)
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: true })
-      .range(offset, offset + limit - 1);
+    const result = await sql`
+      SELECT * FROM chat_messages
+      WHERE user_id = ${req.user.id} AND project_id = ${projectId}
+      ORDER BY created_at ASC
+      LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}
+    `;
 
-    if (error) throw error;
-
-    res.json({ messages: data || [] });
+    res.json({ messages: result || [] });
   } catch (error) {
     console.error('Error fetching chat history:', error);
     res.status(500).json({ error: 'Failed to fetch chat history' });
@@ -51,7 +24,7 @@ router.get('/history/:projectId', authenticateUser, async (req, res) => {
 });
 
 // Save a chat message
-router.post('/message', authenticateUser, async (req, res) => {
+router.post('/message', auth, async (req, res) => {
   try {
     const { projectId, type, content, options } = req.body;
 
@@ -59,23 +32,19 @@ router.post('/message', authenticateUser, async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .insert([
-        {
-          user_id: req.user.id,
-          project_id: projectId,
-          type: type, // 'user', 'ai', or 'plan'
-          content: content,
-          options: options || null,
-        },
-      ])
-      .select()
-      .single();
+    const result = await sql`
+      INSERT INTO chat_messages (user_id, project_id, type, content, options)
+      VALUES (
+        ${req.user.id},
+        ${projectId},
+        ${type},
+        ${content},
+        ${options ? JSON.stringify(options) : null}
+      )
+      RETURNING *
+    `;
 
-    if (error) throw error;
-
-    res.json({ success: true, message: data });
+    res.json({ success: true, message: result[0] });
   } catch (error) {
     console.error('Error saving chat message:', error);
     res.status(500).json({ error: 'Failed to save message' });
@@ -83,17 +52,14 @@ router.post('/message', authenticateUser, async (req, res) => {
 });
 
 // Delete chat history for a project
-router.delete('/history/:projectId', authenticateUser, async (req, res) => {
+router.delete('/history/:projectId', auth, async (req, res) => {
   try {
     const { projectId } = req.params;
 
-    const { error } = await supabase
-      .from('chat_messages')
-      .delete()
-      .eq('user_id', req.user.id)
-      .eq('project_id', projectId);
-
-    if (error) throw error;
+    await sql`
+      DELETE FROM chat_messages
+      WHERE user_id = ${req.user.id} AND project_id = ${projectId}
+    `;
 
     res.json({ success: true, message: 'Chat history cleared' });
   } catch (error) {
@@ -103,28 +69,23 @@ router.delete('/history/:projectId', authenticateUser, async (req, res) => {
 });
 
 // Get all conversations (grouped by project)
-router.get('/conversations', authenticateUser, async (req, res) => {
+router.get('/conversations', auth, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .select('project_id, created_at')
-      .eq('user_id', req.user.id)
-      .order('created_at', { ascending: false });
+    const result = await sql`
+      SELECT DISTINCT ON (project_id) 
+        project_id, 
+        created_at as last_message
+      FROM chat_messages
+      WHERE user_id = ${req.user.id}
+      ORDER BY project_id, created_at DESC
+    `;
 
-    if (error) throw error;
+    const conversations = result.map(row => ({
+      projectId: row.project_id,
+      lastMessage: row.last_message
+    }));
 
-    // Group by project_id and get latest message
-    const conversations = {};
-    (data || []).forEach(msg => {
-      if (!conversations[msg.project_id]) {
-        conversations[msg.project_id] = {
-          projectId: msg.project_id,
-          lastMessage: msg.created_at,
-        };
-      }
-    });
-
-    res.json({ conversations: Object.values(conversations) });
+    res.json({ conversations });
   } catch (error) {
     console.error('Error fetching conversations:', error);
     res.status(500).json({ error: 'Failed to fetch conversations' });
