@@ -15,6 +15,10 @@ import {
 } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { supabase } from '../lib/supabase';
+import ChangeEmailModal from '../components/ChangeEmailModal';
+import ChangePasswordModal from '../components/ChangePasswordModal';
+import toast from 'react-hot-toast';
 import '../styles/profile.css';
 
 const Profile: React.FC = () => {
@@ -28,6 +32,8 @@ const Profile: React.FC = () => {
   const [awsConnected, setAwsConnected] = useState(false);
   const [showAwsForm, setShowAwsForm] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   if (!authUser) return <div>Loading...</div>;
 
@@ -50,11 +56,36 @@ const Profile: React.FC = () => {
     return `${hours}h ${minutes}m`;
   }
 
-  const handleAwsConnect = () => {
+  const handleAwsConnect = async () => {
     if (awsCredentials.accessKeyId && awsCredentials.secretAccessKey) {
-      // TODO: Validate and store AWS credentials securely
-      setAwsConnected(true);
-      setShowAwsForm(false);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          toast.error('Please log in again');
+          return;
+        }
+
+        const API_URL = import.meta.env.VITE_API_URL || 'https://www.hideoutbot.lol';
+        const response = await fetch(`${API_URL}/api/user/aws-credentials`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify(awsCredentials),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save credentials');
+        }
+
+        setAwsConnected(true);
+        setShowAwsForm(false);
+        toast.success('AWS credentials saved securely!');
+      } catch (error) {
+        console.error('Error saving AWS credentials:', error);
+        toast.error('Failed to save AWS credentials');
+      }
     }
   };
 
@@ -321,7 +352,7 @@ const Profile: React.FC = () => {
                 <h4>Email</h4>
                 <p>{user.email}</p>
               </div>
-              <button className="setting-btn">Change</button>
+              <button className="setting-btn" onClick={() => setShowEmailModal(true)}>Change</button>
             </div>
 
             <div className="setting-item">
@@ -329,7 +360,7 @@ const Profile: React.FC = () => {
                 <h4>Password</h4>
                 <p>••••••••</p>
               </div>
-              <button className="setting-btn">Update</button>
+              <button className="setting-btn" onClick={() => setShowPasswordModal(true)}>Update</button>
             </div>
 
             <div className="setting-item">
@@ -337,11 +368,22 @@ const Profile: React.FC = () => {
                 <h4>Plan</h4>
                 <p>{user.plan} Plan - 100 prompts/day</p>
               </div>
-              <button className="setting-btn primary">Upgrade</button>
+              <button className="setting-btn primary" onClick={() => toast('Upgrade feature coming soon!', { icon: '🚀' })}>Upgrade</button>
             </div>
           </div>
         </motion.div>
       </div>
+
+      {/* Modals */}
+      <ChangeEmailModal 
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        currentEmail={user.email}
+      />
+      <ChangePasswordModal 
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+      />
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -18,9 +19,12 @@ const Login: React.FC = () => {
 
     try {
       await login(email, password);
+      toast.success('Welcome back!');
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err?.message || 'Invalid email or password');
+      const errorMsg = err?.message || 'Invalid email or password';
+      setError(errorMsg);
+      toast.error(errorMsg);
       setLoading(false);
     }
   };
@@ -30,8 +34,11 @@ const Login: React.FC = () => {
       setError('');
       setLoading(true);
       await loginWithDiscord();
+      toast.loading('Redirecting to Discord...');
     } catch (e: any) {
-      setError(e?.message || 'Discord login failed');
+      const errorMsg = e?.message || 'Discord login failed';
+      setError(errorMsg);
+      toast.error(errorMsg);
       setLoading(false);
     }
   };
@@ -82,6 +89,15 @@ const Login: React.FC = () => {
                 required
               />
             </div>
+          </div>
+
+          <div className="flex justify-end mb-4">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+            >
+              Forgot password?
+            </Link>
           </div>
 
           <button

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaPaperPlane, FaRobot, FaUser, FaLightbulb, FaCheck, FaClock } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { supabase } from '../lib/supabase';
 import axios from 'axios';
 import '../styles/chat.css';
 
@@ -38,9 +39,78 @@ const Chat: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const promptBalance = user?.prompt_balance || 0;
   const resetTimer = user?.reset_time ? calculateResetTime(user.reset_time) : '24h';
+
+  // Load chat history on mount
+  useEffect(() => {
+    if (selectedProjectId && user) {
+      loadChatHistory();
+    }
+  }, [selectedProjectId, user]);
+
+  const loadChatHistory = async () => {
+    if (!user) return;
+    
+    try {
+      setLoadingHistory(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await axios.get(
+        `${API_URL}/api/chat/history/${selectedProjectId || 'default-project'}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      if (response.data.messages && response.data.messages.length > 0) {
+        const loadedMessages = response.data.messages.map((msg: any) => ({
+          id: msg.id,
+          type: msg.type,
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+          options: msg.options,
+        }));
+        setMessages(loadedMessages);
+      }
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const saveMessage = async (message: Message) => {
+    if (!user) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      await axios.post(
+        `${API_URL}/api/chat/message`,
+        {
+          projectId: selectedProjectId || 'default-project',
+          type: message.type,
+          content: message.content,
+          options: message.options,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        }
+      );
+    } catch (error) {
+      console.error('Error saving message:', error);
+    }
+  };
 
   function calculateResetTime(resetTime: Date): string {
     const now = new Date();
@@ -72,6 +142,7 @@ const Chat: React.FC = () => {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    saveMessage(userMessage); // Save to database
     const promptText = input;
     setInput('');
     setLoading(true);
@@ -100,6 +171,7 @@ const Chat: React.FC = () => {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiMessage]);
+      saveMessage(aiMessage); // Save to database
 
       // Notify via WebSocket for instant updates
       if (socket) {

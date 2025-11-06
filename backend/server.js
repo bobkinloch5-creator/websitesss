@@ -164,6 +164,8 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/prompts', require('./routes/prompts'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/plugin', require('./routes/plugin'));
+app.use('/api/user', require('./routes/user'));
+app.use('/api/chat', require('./routes/chat'));
 
 // 404 handler
 app.use((req, res) => {

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Mail, Lock, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 const Register: React.FC = () => {
   const [name, setName] = useState('');
@@ -19,6 +20,7 @@ const Register: React.FC = () => {
     
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      toast.error('Passwords do not match');
       return;
     }
 
@@ -26,25 +28,44 @@ const Register: React.FC = () => {
     setError('');
 
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+      const { data, error: signUpError } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          data: {
+            username: name,
+          },
+        },
+      });
       if (signUpError) {
-        setError(signUpError.message || 'Registration failed. Please try again.');
+        const errorMsg = signUpError.message || 'Registration failed. Please try again.';
+        setError(errorMsg);
+        toast.error(errorMsg);
       } else {
         if (data.session) {
+          toast.success('Account created successfully!');
           navigate('/dashboard');
         } else {
+          toast.success('Check your email to verify your account!');
           navigate('/login');
         }
       }
     } catch (err) {
-      setError('Registration failed. Please try again.');
+      const errorMsg = 'Registration failed. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDiscordRegister = () => {
-    loginWithDiscord();
+  const handleDiscordRegister = async () => {
+    try {
+      await loginWithDiscord();
+      toast.loading('Redirecting to Discord...');
+    } catch (e: any) {
+      toast.error(e?.message || 'Discord registration failed');
+    }
   };
 
   return (
