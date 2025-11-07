@@ -54,6 +54,32 @@ router.post('/login', async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password required' });
     }
+
+    // Check for admin login with environment variable credentials
+    if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+      if (email.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase() && 
+          password === process.env.ADMIN_PASSWORD) {
+        // Admin login successful - create a special token
+        const adminToken = jwt.sign(
+          { userId: 'admin', email: email.toLowerCase(), role: 'owner', isAdmin: true },
+          process.env.JWT_SECRET,
+          { expiresIn: '30d' }
+        );
+        return res.json({
+          success: true,
+          token: adminToken,
+          user: {
+            id: 'admin',
+            email: email.toLowerCase(),
+            role: 'owner',
+            apiKey: 'admin-key',
+            promptsRemaining: 999999
+          }
+        });
+      }
+    }
+
+    // Normal user login flow
     const user = await UserService.findByEmail(email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });

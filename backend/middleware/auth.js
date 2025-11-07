@@ -8,6 +8,21 @@ module.exports = async (req, res, next) => {
       return res.status(401).json({ error: 'No authentication token provided' });
     }
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Handle admin token
+    if (decoded.isAdmin && decoded.userId === 'admin') {
+      req.user = {
+        id: 'admin',
+        email: decoded.email,
+        role: 'owner',
+        is_active: true,
+        api_key: 'admin-key'
+      };
+      req.userId = 'admin';
+      return next();
+    }
+    
+    // Handle normal user token
     const user = await UserService.findById(decoded.userId);
     if (!user || !user.is_active) {
       return res.status(401).json({ error: 'Invalid authentication token' });
